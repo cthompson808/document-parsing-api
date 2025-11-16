@@ -7,6 +7,7 @@ import re
 from datetime import datetime
 from pdf2image import convert_from_bytes
 from typing import Optional, Tuple, List
+from database import SessionLocal, Invoice
 
 app = FastAPI(title="Document Parsing API", version="0.3")
 
@@ -42,6 +43,21 @@ async def parse_document(file: UploadFile = File(...)):
         date = extract_date(extracted_text)
         total, total_candidates = extract_total(extracted_text)
 
+        # Save to DB
+        db = SessionLocal()
+        record = Invoice(
+            filename=file.filename,
+            vendor=vendor,
+            date=date,
+            total=total,
+            extracted_text=extracted_text.strip()
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        db.close()
+
+
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -55,6 +71,42 @@ async def parse_document(file: UploadFile = File(...)):
         "total_candidates": total_candidates,
         "extracted_text": extracted_text.strip(),
     })
+
+
+@app.get("/invoices")
+def get_invoices():
+    db = SessionLocal()
+    rows = db.query(Invoice).all()
+    db.close()
+    return [
+        {
+            "id": r.id,
+            "filename": r.filename,
+            "vendor": r.vendor,
+            "date": r.date,
+            "total": r.total
+        }
+        for r in rows
+    ]
+
+@app.get("/invoices/{invoice_id}")
+def get_invoice(invoice_id: int):
+    db = SessionLocal()
+    record = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    db.close()
+
+    if not record:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    return {
+        "id": record.id,
+        "filename": record.filename,
+        "vendor": record.vendor,
+        "date": record.date,
+        "total": record.total,
+        "extracted_text": record.extracted_text
+    }
+
 
 # -----------------------------
 # TEXT CLEANING & PREPROCESSING
