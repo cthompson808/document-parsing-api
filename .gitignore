@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+venv/
+.env/
+.env.*
+
+# Logs
+logs.txt
+*.log
+
+# Local databases
+invoices.db
+*.sqlite3
+
+# Uploads and test data
+invoices/
+planning/
+results.csv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Byte-compiled files
+*.bak
+
+# IDEs / Editors
+.vscode/
+.idea/
+
+# Docker
+*.pid
+*.tar
+*.img
+
+# Cache
+*.egg-info/
+dist/
+build/
+
+# Migrations (if using Alembic)
+alembic/
