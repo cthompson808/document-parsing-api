@@ -1,5 +1,6 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Request
 from fastapi.responses import JSONResponse
+from fastapi.openapi.utils import get_openapi
 import pytesseract
 from PIL import Image
 import io
@@ -8,8 +9,66 @@ from datetime import datetime
 from pdf2image import convert_from_bytes
 from typing import Optional, Tuple, List
 from database import SessionLocal, Invoice
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="Document Parsing API", version="0.3")
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title="Document Parsing API",
+        version="1.0.0",
+        description="API for extracting invoice vendor/date/total from documents.",
+        routes=app.routes,
+    )
+
+    # Add API Key header auth to schema
+    openapi_schema["components"]["securitySchemes"] = {
+        "APIKeyHeader": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "x-api-key"
+        }
+    }
+
+    # Apply security globally to all endpoints
+    for path in openapi_schema["paths"]:
+        for method in openapi_schema["paths"][path]:
+            # Only protect actual API endpoints, not docs
+            if path not in ["/ping", "/docs", "/openapi.json"]:
+                openapi_schema["paths"][path][method]["security"] = [{"APIKeyHeader": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
+# -----------------------------
+# MIDDLEWARE
+# -----------------------------
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    # Public endpoints that do NOT require API keys
+    open_paths = ["/ping", "/docs", "/openapi.json"]
+
+    if request.url.path not in open_paths:
+        client_key = request.headers.get("x-api-key")
+        server_key = os.getenv("API_KEY")
+
+        if client_key != server_key:
+            return JSONResponse(
+                {"error": "Unauthorized – invalid or missing API key"},
+                status_code=401
+            )
+
+    return await call_next(request)
+
 
 # -----------------------------
 # ROUTES
